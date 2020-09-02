@@ -125,7 +125,7 @@ func (bot *TelegramBot) append(key, value string) string {
 }
 
 func (bot *TelegramBot) send(message string) error {
-	for _, receiverID := range(bot.Config.ReceiverIDs) {
+	for _, receiverID := range bot.Config.ReceiverIDs {
 		msg := tgbotapi.NewMessage(receiverID, message)
 		msg.ParseMode = "MarkdownV2"
 		if _, err := bot.API.Send(msg); err != nil {

@@ -7,19 +7,19 @@ import (
 )
 
 type CianOffer struct {
-	Config *CianConf
-	CianID int
-	Rooms int
+	Config      *CianConf
+	CianID      int
+	Rooms       int
 	Description string
 
-	TotalArea float32
+	TotalArea  float32
 	LivingArea float32
 
-	Address string
+	Address   string
 	FloorInfo string
 
 	SaleType string
-	Price int
+	Price    int
 
 	PhotoURLs []string
 

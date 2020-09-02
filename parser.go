@@ -16,8 +16,8 @@ import (
 
 const (
 	JSON_DATA_LINE_PREFIX = "window._cianConfig['frontend-serp'] = "
-	CAPTCHA = "<div id=\"captcha\"></div>"
-	CACHE_FOLDER_NAME = "cache"
+	CAPTCHA               = "<div id=\"captcha\"></div>"
+	CACHE_FOLDER_NAME     = "cache"
 )
 
 type CianParser struct {
@@ -35,15 +35,15 @@ func (parser *CianParser) sendRequest(page int, handler func(io.ReadCloser) (int
 		return nil, err
 	}
 	// got it from google chrome to pass through captcha
-	req.AddCookie(&http.Cookie{
-		Name: "anti_bot",
-		Value: "2|1:0|10:1599057753|8:anti_bot|40:eyJyZW1vdGVfaXAiOiAiMTk0LjEwNS4yMTIuMyJ9|a5fd3128dfed4d860b07f8b40e435e8ce5b1239f582af0a91cafdf2eefcb3b57",
-		Domain: ".cian.ru",
-		Expires: time.Date(2020, time.September, 2, 17, 57, 35, 0, time.Local),
-		Path: "/",
-		SameSite: http.SameSiteStrictMode,
-		Secure: true,
-	})
+	//req.AddCookie(&http.Cookie{
+	//	Name:     "anti_bot",
+	//	Value:    "2|1:0|10:1599057753|8:anti_bot|40:eyJyZW1vdGVfaXAiOiAiMTk0LjEwNS4yMTIuMyJ9|a5fd3128dfed4d860b07f8b40e435e8ce5b1239f582af0a91cafdf2eefcb3b57",
+	//	Domain:   ".cian.ru",
+	//	Expires:  time.Date(2020, time.September, 2, 17, 57, 35, 0, time.Local),
+	//	Path:     "/",
+	//	SameSite: http.SameSiteStrictMode,
+	//	Secure:   true,
+	//})
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -85,13 +85,13 @@ func (parser *CianParser) parse(json jsoniter.Any) ([]CianOffer, error) {
 		}
 		floorNumber := jsonOffer.Get("floorNumber").ToInt()
 		offer := CianOffer{
-			Config: parser.Config,
-			CianID: jsonOffer.Get("cianId").ToInt(),
-			Rooms: jsonOffer.Get("roomsCount").ToInt(),
+			Config:      parser.Config,
+			CianID:      jsonOffer.Get("cianId").ToInt(),
+			Rooms:       jsonOffer.Get("roomsCount").ToInt(),
 			Description: jsonOffer.Get("description").ToString(),
-			TotalArea: jsonOffer.Get("totalArea").ToFloat32(),
-			LivingArea: jsonOffer.Get("livingArea").ToFloat32(),
-			FloorInfo: jsonOffer.Get("floorNumber").ToString() + "/" + jsonOffer.Get("building", "floorsCount").ToString(),
+			TotalArea:   jsonOffer.Get("totalArea").ToFloat32(),
+			LivingArea:  jsonOffer.Get("livingArea").ToFloat32(),
+			FloorInfo:   jsonOffer.Get("floorNumber").ToString() + "/" + jsonOffer.Get("building", "floorsCount").ToString(),
 		}
 		offer.parseBargainTerms(jsonOffer.Get("bargainTerms"))
 		if !parser.checkRange(cfg.MinPrice, offer.Price, cfg.MaxPrice) ||
@@ -99,7 +99,7 @@ func (parser *CianParser) parse(json jsoniter.Any) ([]CianOffer, error) {
 			!parser.checkRange(cfg.MinArea, int(offer.TotalArea), cfg.MaxArea) ||
 			!parser.checkRange(cfg.MinLivingArea, int(offer.LivingArea), cfg.MaxLivingArea) ||
 			!cfg.AllowFirstFloor && floorNumber == 1 || !cfg.AllowSecondFloor && floorNumber == 2 {
-				continue
+			continue
 		}
 		offer.parseAddress(jsonOffer.Get("geo", "address"))
 		offer.parsePhone(jsonOffer.Get("phones"))
@@ -111,8 +111,7 @@ func (parser *CianParser) parse(json jsoniter.Any) ([]CianOffer, error) {
 
 func (parser *CianParser) Parse() (map[int]CianOffer, error) {
 	offers := make(map[int]CianOffer)
-	for page := 1;; page++ {
-		log.Printf("parsing page %d", page)
+	for page := 1; ; page++ {
 		body, err := parser.SendRequestAndGetBody(page)
 		if err != nil {
 			return nil, err
@@ -154,7 +153,7 @@ func (parser *CianParser) Parse() (map[int]CianOffer, error) {
 			}
 			return *filteredOffers, nil
 		} else {
-			log.Printf("parsed page %d, %d new offers from here", page, len(offers) - lenBefore)
+			log.Printf("parsed page %d, %d new offers from here", page, len(offers)-lenBefore)
 		}
 	}
 }
@@ -163,25 +162,31 @@ func (parser *CianParser) applyCaching(offers *map[int]CianOffer) (*map[int]Cian
 	if parser.Config.OfferKeepInMemoryPeriod == 0 {
 		return offers, nil
 	}
+	now := time.Now()
 	if _, err := os.Stat(CACHE_FOLDER_NAME); os.IsNotExist(err) {
 		if err = os.Mkdir(CACHE_FOLDER_NAME, 0777); err != nil {
 			return nil, err
 		}
 	} else if err != nil {
 		return nil, err
+	} else {
+		files, err := ioutil.ReadDir(CACHE_FOLDER_NAME)
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range files {
+			if file.ModTime().Add(parser.Config.OfferKeepInMemoryPeriod).Before(now) {
+				if err = os.Remove(CACHE_FOLDER_NAME + "/" + file.Name()); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 	result := make(map[int]CianOffer)
-	now := time.Now()
 	for cianID, offer := range *offers {
 		fileName := CACHE_FOLDER_NAME + "/" + strconv.Itoa(cianID)
-		stat, err := os.Stat(fileName)
-		if err == nil {
-			if stat.ModTime().Add(parser.Config.OfferKeepInMemoryPeriod).After(now) {
-				continue
-			}
-			if err = os.Remove(fileName); err != nil {
-				return nil, err
-			}
+		if _, err := os.Stat(fileName); err == nil {
+			continue
 		} else if !os.IsNotExist(err) {
 			return nil, err
 		}
